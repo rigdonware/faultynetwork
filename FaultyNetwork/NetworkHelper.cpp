@@ -6,16 +6,18 @@
 #include <string>
 #include <windows.h>
 
-NetworkHelper::NetworkHelper(int port)
+NetworkHelper::NetworkHelper(unsigned short port)
 {
-	m_Ip = "127.0.0.1";// sf::IpAddress::LocalHost;
-	m_Socket.bind(port);
-	sendPort = port;
+	m_Ip = sf::IpAddress::LocalHost;
 	m_Socket.setBlocking(false);
+	if(m_Socket.bind(port, m_Ip) != sf::Socket::Done)
+		std::cout << "Failed to bind to port: " << port << std::endl;
+
+	sendPort = port + 1;
 
 	sf::Packet packet;
-	packet << "init";
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
+	packet << "";
+	if (m_Socket.send(packet, m_Ip, m_Socket.getLocalPort()) != sf::Socket::Done)
 	{
 		std::cout << "Failed to send packet" << std::endl;
 		std::cout << "Error: " << m_Socket.Error << std::endl;
@@ -27,7 +29,7 @@ void NetworkHelper::SendChatMessage(std::string message)
 	sf::Packet packet;
 	packet << message;
 
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
+	if (m_Socket.send(packet, m_Ip, m_Socket.getLocalPort()) != sf::Socket::Done)
 	{
 		std::cout << "Failed to send packet" << std::endl;
 		std::cout << "Error: " << m_Socket.Error << std::endl;
@@ -265,8 +267,10 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 	if (respSize == 0)
 		return;
 
-	if (m_Socket.getLocalPort() == receivePort)
-		return;
+	std::cout << "port bound: " << m_Socket.getLocalPort() << " received message from : " << receivePort << std::endl;
+
+	//if (m_Socket.getLocalPort() == receivePort)
+	//	return;
 
 	std::vector<unsigned char> bits;
 	std::string response;

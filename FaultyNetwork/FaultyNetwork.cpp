@@ -14,8 +14,9 @@ int main()
 {
 	sf::RenderWindow window(sf::VideoMode(1000, 800), "Faulty Network");
 	sf::Font fnt;
-	fnt.loadFromFile("arial.ttf");
-	
+	if (!fnt.loadFromFile("arial.ttf"))
+		std::cout << "Failed to load font" << std::endl;
+
 	EditBox textEntry;
 	int height = 20;
 	textEntry.InitEditBox(0, window.getSize().y - height, window.getSize().x, height, fnt);
