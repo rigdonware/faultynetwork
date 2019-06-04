@@ -6,18 +6,18 @@
 #include <string>
 #include <windows.h>
 
-NetworkHelper::NetworkHelper(unsigned short port)
+NetworkHelper::NetworkHelper(unsigned short receivePort, unsigned short send)
 {
 	m_Ip = sf::IpAddress::LocalHost;
 	m_Socket.setBlocking(false);
-	if(m_Socket.bind(port, m_Ip) != sf::Socket::Done)
-		std::cout << "Failed to bind to port: " << port << std::endl;
+	if(m_Socket.bind(receivePort) != sf::Socket::Done)
+		std::cout << "Failed to bind to port: " << receivePort << std::endl;
 
-	sendPort = port + 1;
+	sendPort = send;
 
 	sf::Packet packet;
 	packet << "";
-	if (m_Socket.send(packet, m_Ip, m_Socket.getLocalPort()) != sf::Socket::Done)
+	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
 	{
 		std::cout << "Failed to send packet" << std::endl;
 		std::cout << "Error: " << m_Socket.Error << std::endl;
@@ -29,136 +29,11 @@ void NetworkHelper::SendChatMessage(std::string message)
 	sf::Packet packet;
 	packet << message;
 
-	if (m_Socket.send(packet, m_Ip, m_Socket.getLocalPort()) != sf::Socket::Done)
-	{
-		std::cout << "Failed to send packet" << std::endl;
-		std::cout << "Error: " << m_Socket.Error << std::endl;
-	}
-}
-
-void NetworkHelper::SendReadMessage(std::string fileToRead, char fileNum)
-{
-	unsigned char code[1]; code[0] = 'R';
-	unsigned char file[32] = "";
-
-	if (fileNum != NULL)
-	{
-		file[0] = fileNum;
-		int count = 0;
-		for (int i = 1; i <= fileToRead.length(); i++)
-		{
-			file[i] = fileToRead[count];
-			count++;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < fileToRead.length(); i++)
-			file[i] = fileToRead[i];
-	}
-
-	unsigned int location = 0;
-
-	sf::Packet packet;
-	packet.append(&code, 1);
-	packet.append(&file, 32);
-	packet.append(&location, 4);
-
 	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
 	{
 		std::cout << "Failed to send packet" << std::endl;
 		std::cout << "Error: " << m_Socket.Error << std::endl;
 	}
-}
-
-void NetworkHelper::SendWriteMessage(std::string fileToWrite, char fileNum)
-{
-	if (fileNum != NULL && fileNum == '4')
-		return;
-
-	unsigned char code[1]; code[0] = 'W';
-	unsigned char file[32] = "";
-
-	if (fileNum != NULL)
-	{
-		int counter = 0;
-		file[0] = fileNum;
-		for (int i = 1; i <= fileToWrite.length(); i++)
-		{
-			file[i] = static_cast<unsigned char>(fileToWrite[counter]);
-			counter++;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < fileToWrite.length(); i++)
-			file[i] = static_cast<unsigned char>(fileToWrite[i]);
-	}
-
-	std::fstream fin(fileToWrite, std::ios_base::in | std::ios_base::binary);
-	unsigned int location = 0;
-	unsigned char data[10] = "";
-
-	char test[4] = { 0 };
-	fin.read(test, 3);
-	if (strcmp(test, "\xEF\xBB\xBF") != 0)
-		fin.seekg(0);
-
-	char contents[10];
-	
-	while (fin.read(contents, 10))
-	{
-		for (int i = 0; i < 10; i++)
-			data[i] = contents[i];
-
-		unsigned int size = (sizeof(contents) / sizeof(contents[0]));
-
-		sf::Packet packet;
-		packet.append(&code, 1);
-		packet.append(&file, 32);
-		packet.append(&location, 4);
-		packet.append(&size, 1);
-		packet.append(&data, 10);
-
-		if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
-		{
-			std::cout << "Failed to send packet" << std::endl;
-			std::cout << "Error: " << m_Socket.Error << std::endl;
-		}
-		memset(contents, 0, sizeof(contents));
-		location += 10;
-		Sleep(50);
-	}
-
-	for (int i = 0; i < 10; i++)
-		data[i] = static_cast<unsigned char>(contents[i]);
-
-	unsigned int size = (sizeof(data) / sizeof(data[0]));
-
-	sf::Packet packet;
-	packet.append(&code, 1);
-	packet.append(&file, 32);
-	packet.append(&location, 4);
-	packet.append(&size, 1);
-	packet.append(&data, 10);
-
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
-	{
-		std::cout << "Failed to send packet" << std::endl;
-		std::cout << "Error: " << m_Socket.Error << std::endl;
-	}
-
-	fin.close();
-
-	char nextFile = '2';
-	if (fileNum == '2')
-		nextFile = '3';
-	else if (fileNum == '3')
-		nextFile = '4';
-
-	memset(contents, 0, sizeof(contents));
-
-	SendWriteMessage(fileToWrite, nextFile);
 }
 
 void NetworkHelper::SendWriteRetryMessage(std::vector<unsigned char> bits)

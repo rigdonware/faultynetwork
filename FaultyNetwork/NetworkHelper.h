@@ -8,7 +8,7 @@ class VotingStructure;
 class NetworkHelper
 {
 public:
-	NetworkHelper(unsigned short port);
+	NetworkHelper(unsigned short receivePort, unsigned short sendPort);
 	void ReceiveMessage(TextField& textField);
 	void SendChatMessage(std::string message);
 	void SendReadMessage(std::string fileToRead, char fileNum = NULL);
