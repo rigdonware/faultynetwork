@@ -23,13 +23,11 @@ int main()
 	TextField textField;
 	textField.InitTextField(0, 0, window.getSize().x, window.getSize().y);
 
-	std::string receivePort, sendPort;
-	std::cout << "Enter receive port number" << std::endl;
-	std::cin >> receivePort;
-	std::cout << "Enter send port number" << std::endl;
+	std::string sendPort;
+	std::cout << "Enter initial send port number" << std::endl;
 	std::cin >> sendPort;
 
-	NetworkHelper network(std::stoi(receivePort), std::stoi(sendPort));
+	NetworkHelper network(std::stoi(sendPort));
 
 	sf::Clock clock;
 	double elapsedTime = 0.0;

@@ -8,7 +8,7 @@ class VotingStructure;
 class NetworkHelper
 {
 public:
-	NetworkHelper(unsigned short receivePort, unsigned short sendPort);
+	NetworkHelper(unsigned short sendPort);
 	void ReceiveMessage(TextField& textField);
 	void SendChatMessage(std::string message);
 	void SendReadMessage(std::string fileToRead, char fileNum = NULL);
@@ -20,6 +20,13 @@ public:
 	VotingStructure* m_SmallText;
 	VotingStructure* m_LargeText;
 	std::vector<std::string> m_Messages;
+	std::string GetBinaryFromCharacter(char c); // convert a character to a group of eight digits
+	char GetCharacterFromBinary(std::string s); // convert a group of 8 digits to a character
+	std::vector<char> ConvertMessageToBits(std::string message);
+	std::vector<char> CreateParityBits(std::vector<char> bits);
+	bool IsPowerOfTwo(unsigned long n);
+	bool IsEven(int n);
+	int CalculateParityValue(int whichBit, std::vector<char> bits);
 private:
 	sf::IpAddress m_Ip;
 	sf::UdpSocket m_Socket;

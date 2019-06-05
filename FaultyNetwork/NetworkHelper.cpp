@@ -4,14 +4,15 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <bitset>
+#include <queue>
 #include <windows.h>
 
-NetworkHelper::NetworkHelper(unsigned short receivePort, unsigned short send)
+NetworkHelper::NetworkHelper(unsigned short send)
 {
 	m_Ip = sf::IpAddress::LocalHost;
 	m_Socket.setBlocking(false);
-	if(m_Socket.bind(receivePort) != sf::Socket::Done)
-		std::cout << "Failed to bind to port: " << receivePort << std::endl;
+	m_Socket.bind(sf::UdpSocket::AnyPort);
 
 	sendPort = send;
 
@@ -26,105 +27,34 @@ NetworkHelper::NetworkHelper(unsigned short receivePort, unsigned short send)
 
 void NetworkHelper::SendChatMessage(std::string message)
 {
-	sf::Packet packet;
-	packet << message;
+	std::vector<char> bits = ConvertMessageToBits(message);
+	std::queue<char> bitQueue;
+	for (int i = 0; i < bits.size(); i++)
+		bitQueue.push(bits[i]);
 
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
+	while (!bitQueue.empty())
 	{
-		std::cout << "Failed to send packet" << std::endl;
-		std::cout << "Error: " << m_Socket.Error << std::endl;
-	}
-}
+		std::vector<char> newBits;
+		for (int i = 0; i < 8; i++)
+		{
+			newBits.push_back(bitQueue.front());
+			bitQueue.pop();
+		}
 
-void NetworkHelper::SendWriteRetryMessage(std::vector<unsigned char> bits)
-{
-	unsigned char code[1]; code[0] = 'W';
-	unsigned char file[32] = "";
+		//for (int amount = 0; amount < 100; amount++)
+		//{
+			std::vector<char> parity = CreateParityBits(newBits);
 
-	std::string fileName = "";
-	int count = 0;
-	for (int i = 1; i < 33; i++)
-	{
-		file[count] = bits.at(i);
-		count++;
-		if (bits.at(i) != 0)
-			fileName.push_back(bits.at(i));
-	}
-	unsigned int length = bits.at(37);
+			sf::Packet packet;
+			for(int j = 0; j < parity.size(); j++)
+				packet << parity[j];
 
-	if (length == 0)
-	{
-		VotingStructure* structure = NULL;
-
-		if (fileName == "SmallTextFile.txt")
-			structure = m_SmallText;
-		else if (fileName == "LargeTextFile.txt")
-			structure = m_LargeText;
-
-		//structure->doVoting = true;
-	}
-
-	unsigned int location = 0;
-	location += bits.at(33);
-	location += (bits.at(34) * 256);
-	location += (bits.at(35) * 512);
-	location += (bits.at(36) * 1024);
-
-	unsigned char data[10] = "";
-
-	count = 0;
-	for (int i = 38; i < 48; i++)
-	{
-		data[count] = bits.at(i);
-		//std::cout << data[count];
-		count++;
-	}
-
-	sf::Packet packet;
-	packet.append(&code, 1);
-	packet.append(&file, 32);
-	packet.append(&location, 4);
-	packet.append(&length, 1);
-	packet.append(&data, 10);
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
-	{
-		std::cout << "Failed to send packet" << std::endl;
-		std::cout << "Error: " << m_Socket.Error << std::endl;
-	}
-}
-
-void NetworkHelper::SendReadRetryMessage(std::vector<unsigned char> bits)
-{
-	unsigned int length = bits.at(37);
-
-	//if (length == 0)
-	//	return;
-
-	unsigned char code[1]; code[0] = 'R';
-	unsigned char file[32] = "";
-
-	int count = 0;
-	for (int i = 1; i < 33; i++)
-	{
-		file[count] = bits.at(i);
-		count++;
-	}
-		
-	unsigned int location = 0;
-	location += bits.at(33);
-	location += (bits.at(34) * 256);
-	location += (bits.at(35) * 512);
-	location += (bits.at(36) * 1024);
-
-	sf::Packet packet;
-	packet.append(&code, 1);
-	packet.append(&file, 32);
-	packet.append(&location, 4);
-
-	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
-	{
-		std::cout << "Failed to send packet" << std::endl;
-		std::cout << "Error: " << m_Socket.Error << std::endl;
+			if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
+			{
+				std::cout << "Failed to send packet" << std::endl;
+				std::cout << "Error: " << m_Socket.Error << std::endl;
+			}
+		//}
 	}
 }
 
@@ -295,4 +225,90 @@ void NetworkHelper::ReceiveDataMessage(std::vector<unsigned char> bits)
 	//unsigned char newBit;
 	//newBit ^= previousBit;
 	//std::cout << newBit;
+}
+
+std::string NetworkHelper::GetBinaryFromCharacter(char c)
+{
+	std::bitset<8> temp(c);
+	return temp.to_string();
+}
+
+char NetworkHelper::GetCharacterFromBinary(std::string group)
+{
+	std::bitset<8> temp(group);
+	return temp.to_ulong();
+}
+
+std::vector<char> NetworkHelper::ConvertMessageToBits(std::string message)
+{
+	std::vector<char> bits;
+	for (int i = 0; i < message.size(); i++)
+	{
+		std::string binary = GetBinaryFromCharacter(message[i]);
+		for (int j = 0; j < binary.size(); j++)
+			bits.push_back(binary[j]);
+	}
+	return bits;
+}
+
+std::vector<char> NetworkHelper::CreateParityBits(std::vector<char> bits)
+{
+	std::vector<char> parity(20);
+
+	std::cout << "Creating parity bits for: ";
+	for (int i = 0; i < bits.size(); i++)
+		std::cout << bits[i];
+
+	std::cout << std::endl;
+
+	int count = 0;
+	for (int i = 1; i <= parity.size() - 1, count < bits.size(); i++)
+	{
+		if (!IsPowerOfTwo(i))
+		{
+			parity.at(i) = bits[count];
+			count++;
+		}
+		else
+		{
+			int val = CalculateParityValue(i, bits);
+			parity.at(i) = '0' + val;
+		}
+	}
+
+	std::cout << "Resulting parity binary: ";
+	for (int i = 0; i < parity.size(); i++)
+		std::cout << parity[i];
+
+	return parity;
+}
+
+bool NetworkHelper::IsPowerOfTwo(unsigned long n)
+{
+	if (n == 1)
+		return true;
+
+	return (n != 0) && ((n & (n - 1)) == 0);
+}
+
+bool NetworkHelper::IsEven(int n)
+{
+	return (n % 2 == 0);
+}
+
+int NetworkHelper::CalculateParityValue(int whichBit, std::vector<char> bits)
+{
+	int parity = 0;
+	for (int i = whichBit; i <= bits.size() - 1; i+=whichBit)
+	{
+		for (int j = 0; j < whichBit; j++)
+		{
+			parity += '0' + bits.at(i + j);
+		}
+	}
+
+	if (IsEven(parity))
+		return 1;
+		
+	return 0;
 }
