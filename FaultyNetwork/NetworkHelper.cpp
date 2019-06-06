@@ -41,27 +41,58 @@ void NetworkHelper::SendChatMessage(std::string message)
 			newBits.push_back(bitQueue.front());
 			bitQueue.pop();
 		}
+		
 
 		//for (int amount = 0; amount < 100; amount++)
 		//{
 			std::vector<int> parity = CreateParityBits(newBits);
 			std::vector<unsigned char> parityInChar;
 			unsigned char blah[8];
+			bool data[8];
 			std::string blahlbhal;
 			sf::Packet packet;
 			int value;
-			for (int j = 0; j < 8; j++)
-				blah[j] = parity[j];
-			for (int j = 0; j < 8; j++)
-				blahlbhal += std::to_string(parity[j]);
+			unsigned char bitBuffer = parity.at(0);
+			unsigned char bitBuffer2 = parity.at(8);
+			int n;
+
+			for (int i = 1; i < 8; i++)
+			{
+				if (parity.at(i))
+					bitBuffer += (1 << i);
+			}
+			int position = 1;
+			for (int i = 9; i < parity.size(); i++)
+			{
+				if (parity.at(i))
+					bitBuffer2 += (1 << position);
+				position++;
+			}
+
+			//for (int i = 0; i < 8; i++)
+			//{
+			//	//if(parity.at(i))
+			//		bitBuffer |= (i & parity.at(i) & 0x1);
+			//	//if(parity.at(i))
+			//	//	bitBuffer |= 1 << parity.at(i);
+			//}
+			//for (int i = 0; i < 8; i++)
+			//{
+			//	n = parity.at(i) >> i;
+			//}
+			//for (int j = 0; j < 8; j++)
+			//	blah[j] = parity[j];
+			//for (int j = 0; j < 8; j++)
+			//	blahlbhal += std::to_string(parity[j]);
 			//for (int j = 0; j < parity.size(); j++)
 			//	parityInChar.push_back(parity[j]);
 
 
 			//packet << value;
 			packet.append(&messageId, 4);
-			//packet.append(&blahlbhal, 1);
-			packet << blah;
+			packet.append(&bitBuffer, 1);
+			packet.append(&bitBuffer2, 1);
+			//packet << blah;
 			//for (int j = 0; j < parity.size(); j++)
 			//	packet << parity.at(j);
 
@@ -102,19 +133,37 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 	messageId += (response.at(2) * 512);
 	messageId += (response.at(3) * 1024);
 
-	for (int i = 4; i < response.size(); i++)
-	{
-		int num = response.at(i);
-		
-		if (num != 0 || num != 1)
-		{
-			response.at(i) ^= response.at(i);
-		}
-		num = response.at(i);
-		bits.push_back(response.at(i));
-	}
+	if (response.size() == 4) //starting 
+		return;
 
-	std::vector<int> bitsWithoutParity = RemoveParityBits(bits);
+	unsigned char byte1 = response.at(4);
+	unsigned char byte2 = response.at(5);
+	
+	std::vector<int> byte1Array = GetBinaryFromCharacter(byte1);
+	std::vector<int> byte2Array = GetBinaryFromCharacter(byte2);
+	std::vector<int> allBytes;
+	for (int i = byte1Array.size() - 1; i >= 0; i--)
+		allBytes.push_back(byte1Array[i]);
+	for (int i = byte2Array.size() - 1; i >= 0; i--)
+		allBytes.push_back(byte2Array[i]);
+	//for (int i = 0; i < 8; i++)
+	//{
+	//	numBits.push_back((byte >> i) + 1);
+	//}
+
+	//for (int i = 4; i < response.size(); i++)
+	//{
+	//	int num = response.at(i);
+	//	
+	//	if (num != 0 || num != 1)
+	//	{
+	//		response.at(i) ^= response.at(i);
+	//	}
+	//	num = response.at(i);
+	//	bits.push_back(response.at(i));
+	//}
+
+	std::vector<int> bitsWithoutParity = RemoveParityBits(allBytes);
 
 	std::string group;
 	for (auto& c : bitsWithoutParity)
@@ -124,10 +173,10 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 
 	std::cout << "passed back character before parity: " << passedInCharacter << std::endl;
 
-	if(bits.size() > 0)
-		VerifyMessage(bits);
+	if(allBytes.size() > 0)
+		VerifyMessage(allBytes);
 
-	bitsWithoutParity = RemoveParityBits(bits);
+	bitsWithoutParity = RemoveParityBits(allBytes);
 
 	group = "";
 	for (auto& c : bitsWithoutParity)
@@ -234,7 +283,7 @@ int NetworkHelper::CalculateParityValue(int whichBit, std::vector<int> bits)
 		for (int j = 0; j < whichBit; j++)
 		{
 			if((i + j) < bits.size())
-				parity += (bits.at(i + j) - 48);
+				parity += (bits.at((i-1) + j));
 		}
 	}
 
@@ -247,8 +296,6 @@ int NetworkHelper::CalculateParityValue(int whichBit, std::vector<int> bits)
 std::vector<int> NetworkHelper::LoadParityVector(std::vector<int> bits)
 {
 	std::vector<int> parity;
-	parity.push_back(NULL);
-
 	int count = 0;
 
 	for (int i = 1; count < bits.size(); i++)
@@ -268,22 +315,29 @@ std::vector<int> NetworkHelper::LoadParityVector(std::vector<int> bits)
 void NetworkHelper::VerifyMessage(std::vector<int>& bits)
 {
 	std::vector<int> badBits;
+	bool hasBadBit = false;
 
-	for (int i = 1; i <= bits.size() - 1; i++)
+	int count = 0;
+
+	for (int i = 0; i < bits.size(); i++)
 	{
-		if (IsPowerOfTwo(i))
+		if (IsPowerOfTwo(i + 1))
 		{
-			int correctVal = CalculateParityValue(i, bits);
-			int currentVal = bits.at(i) - 48;
+			int correctVal = CalculateParityValue(i+1, bits);
+			int currentVal = bits.at(i);
 			if (correctVal != currentVal)
+			{
 				badBits.push_back(i);
+				hasBadBit = true;
+			}
 		}
 	}
 
+	int whichBit = 0;
 	for (auto& bit : badBits)
 	{
-		int bitVal = bits.at(bit) - 48;
-		bits.at(bit) = (bitVal == 1 ? 0 : 1);
+		whichBit += bit;
 	}
-
+	if(hasBadBit)
+		bits.at(whichBit) = (bits.at(whichBit) == 1 ? 0 : 1);
 }
