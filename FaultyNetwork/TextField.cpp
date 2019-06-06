@@ -10,7 +10,7 @@ TextField::TextField()
 
 	m_EnteredString = "";
 	//m_Text.setStyle(sf::Text::Bold);
-	m_Text.setCharacterSize(18);
+	m_Text.setCharacterSize(15);
 
 	m_Font.loadFromFile("arial.ttf");
 }
@@ -42,7 +42,7 @@ void TextField::Render(sf::RenderWindow& window)
 
 void TextField::AddMessage(std::string message)
 {
-	m_Messages.push_back(sf::Text(message, m_Font, 18));
+	m_Messages.push_back(sf::Text(message, m_Font, 15));
 	m_Messages.at(m_Messages.size() - 1).setPosition(0, (m_Messages.size() - 1) * 20);
 	m_Messages.at(m_Messages.size() - 1).setFillColor(sf::Color::Black);
 }

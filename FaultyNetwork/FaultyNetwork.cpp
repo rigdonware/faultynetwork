@@ -12,7 +12,7 @@
 
 int main()
 {
-	sf::RenderWindow window(sf::VideoMode(1000, 800), "Faulty Network");
+	sf::RenderWindow window(sf::VideoMode(1000, 900), "Faulty Network");
 	sf::Font fnt;
 	if (!fnt.loadFromFile("arial.ttf"))
 		std::cout << "Failed to load font" << std::endl;

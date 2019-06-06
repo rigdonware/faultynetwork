@@ -27,6 +27,7 @@ public:
 	std::vector<int> RemoveParityBits(std::vector<int> bits);
 	std::vector<char> m_TotalResponse;
 	std::vector<std::string> m_ResponseHistory;
+	unsigned int m_MessageId;
 private:
 	sf::IpAddress m_Ip;
 	sf::UdpSocket m_Socket;

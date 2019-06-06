@@ -15,6 +15,7 @@ NetworkHelper::NetworkHelper(unsigned short send)
 	m_Socket.bind(sf::UdpSocket::AnyPort);
 
 	sendPort = send;
+	m_MessageId = 1;
 
 	sf::Packet packet;
 	packet << "";
@@ -40,7 +41,10 @@ void NetworkHelper::SendChatMessage(std::string message)
 			fin.seekg(0);
 
 		while (std::getline(fin, line))
+		{
 			ss << line;
+			ss << "\n";
+		}
 
 		fin.close();
 
@@ -52,7 +56,6 @@ void NetworkHelper::SendChatMessage(std::string message)
 	for (int i = 0; i < bits.size(); i++)
 		bitQueue.push(bits[i]);
 
-	unsigned int messageId = 1;
 	std::vector<int> newBits;
 	sf::Packet packet;
 	while (!bitQueue.empty())
@@ -72,57 +75,46 @@ void NetworkHelper::SendChatMessage(std::string message)
 		}
 
 		packet.append(&bitBuffer, 1);
-
-
-		//for (int amount = 0; amount < 100; amount++)
-		//{
-			
-			//unsigned char bitBuffer2 = parity.at(8);
-
-			
-			//int position = 1;
-			//for (int i = 9; i < parity.size(); i++)
-			//{
-			//	if (parity.at(i))
-			//		bitBuffer2 += (1 << position);
-			//	position++;
-			//}
-			//std::string messageIdString = std::bitset<8>(messageId).to_string();
-			//std::vector<int> messageArray;
-			//for (int i = 0; i < messageIdString.size(); i++)
-			//	messageArray.push_back(messageIdString[i] - 48);
-
-			//unsigned char messageBuffer = messageArray.at(7);
-			//for (int i = 6; i > 0; i--)
-			//{
-			//	if (messageArray.at(i))
-			//		messageBuffer += (1 << i);
-			//}
-			//
-			//packet.append(&messageBuffer, 4);
-			//packet.append(&bitBuffer2, 1);
-		//}
 	}
+
+	//if (selector.wait(sf::seconds(3)))
+	//{
+	//	if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
+	//	{
+	//		std::cout << "Failed to send packet" << std::endl;
+	//		std::cout << "Error: " << m_Socket.Error << std::endl;
+	//	}
+	//}
+	//else
+	//{
+	//	
+	//}
 	//for (int i = 0; i < 10; i++)
 	//{
+		
+	//}
+	for (int i = 0; i < 100; i++)
+	{
 		if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
 		{
 			std::cout << "Failed to send packet" << std::endl;
 			std::cout << "Error: " << m_Socket.Error << std::endl;
 		}
-	//}
+		Sleep(50);
+	}
+	//m_MessageId++;
 }
 
 void NetworkHelper::ReceiveMessage(TextField& textField)
 {
-	unsigned char buffer[512];      // The buffer to store raw response data in
+	unsigned char buffer[5000];      // The buffer to store raw response data in
 	sf::IpAddress respIP;  // The ip address where the response came from
 	size_t respSize;     // The amount of data actually written to buffer
 	unsigned short receivePort;
 
 	// Now receive a response.  This is a blocking call, meaning your program
 	// will hang until a response is received.
-	m_Socket.receive(buffer, 512, respSize, respIP, receivePort);
+	m_Socket.receive(buffer, 5000, respSize, respIP, receivePort);
 	
 	if (respSize == 0)
 		return;
@@ -142,38 +134,11 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 		unsigned char byte = resp;
 
 		std::vector<int> byteArray = GetBinaryFromCharacter(byte);
-		//std::vector<int> byte2Array = GetBinaryFromCharacter(byte2);
 		std::vector<int> allBytes;
 		for (int i = byteArray.size() - 1; i >= 0; i--)
 			allBytes.push_back(byteArray[i]);
-		//for (int i = byte2Array.size() - 1; i >= 0; i--)
-		//	allBytes.push_back(byte2Array[i]);
-		//for (int i = 0; i < 8; i++)
-		//{
-		//	numBits.push_back((byte >> i) + 1);
-		//}
-
-		//for (int i = 4; i < response.size(); i++)
-		//{
-		//	int num = response.at(i);
-		//	
-		//	if (num != 0 || num != 1)
-		//	{
-		//		response.at(i) ^= response.at(i);
-		//	}
-		//	num = response.at(i);
-		//	bits.push_back(response.at(i));
-		//}
 
 		std::vector<int> bitsWithoutParity = RemoveParityBits(allBytes);
-
-		//std::string group;
-		//for (auto& c : bitsWithoutParity)
-		//	group += (std::to_string(c));
-
-		//char passedInCharacter = GetCharacterFromBinary(group);
-
-		//std::cout << "passed back character before parity: " << passedInCharacter << std::endl;
 
 		if (allBytes.size() > 0)
 			VerifyMessage(allBytes);
@@ -191,7 +156,6 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 
 			char passedInCharacter = GetCharacterFromBinary(group);
 			m_TotalResponse.push_back(passedInCharacter);
-			//std::cout << "passed back character after parity: " << passedInCharacter << std::endl;
 
 			responseGroup.clear();
 		}
@@ -201,23 +165,16 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 	for (auto& c : m_TotalResponse)
 		finalMessage.push_back(c);
 
-	//for (auto& history : m_ResponseHistory)
-	//{
-	//	if (history == finalMessage)
-	//		return;
-	//}
+	for (auto& history : m_ResponseHistory)
+	{
+		if (history == finalMessage)
+			return;
+	}
+
+	m_ResponseHistory.push_back(finalMessage);
 
 	textField.AddMessage(finalMessage);
 	m_TotalResponse.clear();
-
-	//unsigned char byte2 = response.at(5);
-	
-	
-
-
-	//m_Response[messageId] = 'c';
-
-	//textField.AddMessage(response);
 }
 
 std::vector<int> NetworkHelper::GetBinaryFromCharacter(char c)
