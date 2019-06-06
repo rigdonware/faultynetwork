@@ -27,14 +27,15 @@ NetworkHelper::NetworkHelper(unsigned short send)
 
 void NetworkHelper::SendChatMessage(std::string message)
 {
-	std::vector<char> bits = ConvertMessageToBits(message);
-	std::queue<char> bitQueue;
+	std::vector<int> bits = ConvertMessageToBits(message); //{'1','0','1','1','0','0','1'};// ConvertMessageToBits(message);
+	std::queue<int> bitQueue;
 	for (int i = 0; i < bits.size(); i++)
 		bitQueue.push(bits[i]);
 
+	unsigned int messageId = 1;
 	while (!bitQueue.empty())
 	{
-		std::vector<char> newBits;
+		std::vector<int> newBits;
 		for (int i = 0; i < 8; i++)
 		{
 			newBits.push_back(bitQueue.front());
@@ -43,11 +44,26 @@ void NetworkHelper::SendChatMessage(std::string message)
 
 		//for (int amount = 0; amount < 100; amount++)
 		//{
-			std::vector<char> parity = CreateParityBits(newBits);
-
+			std::vector<int> parity = CreateParityBits(newBits);
+			std::vector<unsigned char> parityInChar;
+			unsigned char blah[8];
+			std::string blahlbhal;
 			sf::Packet packet;
-			for(int j = 0; j < parity.size(); j++)
-				packet << parity[j];
+			int value;
+			for (int j = 0; j < 8; j++)
+				blah[j] = parity[j];
+			for (int j = 0; j < 8; j++)
+				blahlbhal += std::to_string(parity[j]);
+			//for (int j = 0; j < parity.size(); j++)
+			//	parityInChar.push_back(parity[j]);
+
+
+			//packet << value;
+			packet.append(&messageId, 4);
+			//packet.append(&blahlbhal, 1);
+			packet << blah;
+			//for (int j = 0; j < parity.size(); j++)
+			//	packet << parity.at(j);
 
 			if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
 			{
@@ -55,6 +71,7 @@ void NetworkHelper::SendChatMessage(std::string message)
 				std::cout << "Error: " << m_Socket.Error << std::endl;
 			}
 		//}
+		messageId++;
 	}
 }
 
@@ -72,165 +89,67 @@ void NetworkHelper::ReceiveMessage(TextField& textField)
 	if (respSize == 0)
 		return;
 
-	std::cout << "port bound: " << m_Socket.getLocalPort() << " received message from : " << receivePort << std::endl;
-
-	//if (m_Socket.getLocalPort() == receivePort)
-	//	return;
-
-	std::vector<unsigned char> bits;
-	std::string response;
+	std::vector<int> bits;
+	std::vector<unsigned char> response;
 	for (int i = 0; i < respSize; i++)
 	{
 		response.push_back(buffer[i]);
 	}
-	textField.AddMessage(response);
-}
 
-void NetworkHelper::ReceiveAckMessage(std::vector<unsigned char> bits)
-{
-	/*
-		Opcode: D 1 byte
-		File name: 32 bytes
-		Location: 4 bytes
-		Data Length: 1 byte
-		Data 10 bytes
-		Valid 1 byte
-	*/
-	std::string fileName = "";
-	for (int i = 1; i < 33; i++)
+	unsigned int messageId = 0;
+	messageId += response.at(0);
+	messageId += (response.at(1) * 256);
+	messageId += (response.at(2) * 512);
+	messageId += (response.at(3) * 1024);
+
+	for (int i = 4; i < response.size(); i++)
 	{
-		if (bits.at(i) != 0)
+		int num = response.at(i);
+		
+		if (num != 0 || num != 1)
 		{
-			fileName.push_back(bits.at(i));
-			int fileNum = bits.at(i) - '0';
+			response.at(i) ^= response.at(i);
 		}
+		num = response.at(i);
+		bits.push_back(response.at(i));
 	}
 
-	unsigned int location = 0;
-	location += bits.at(33);
-	location += (bits.at(34) * 256);
-	location += (bits.at(35) * 512);
-	location += (bits.at(36) * 1024);
+	std::vector<int> bitsWithoutParity = RemoveParityBits(bits);
 
-	VotingStructure* structure = NULL;
+	std::string group;
+	for (auto& c : bitsWithoutParity)
+		group += (std::to_string(c));
 
-	if (fileName == "SmallTextFile.txt")
-		structure = m_SmallText;
-	else if (fileName == "LargeTextFile.txt")
-		structure = m_LargeText;
+	char passedInCharacter = GetCharacterFromBinary(group);
 
-	unsigned int length = bits.at(37);
+	std::cout << "passed back character before parity: " << passedInCharacter << std::endl;
 
-	//if (length == 0)
-	//{
-	//	structure->doVoting = true;
-	//}
+	if(bits.size() > 0)
+		VerifyMessage(bits);
 
-	//unsigned char valid = bits.at(bits.size() - 1);
-	//if (!valid)
-	//	SendWriteRetryMessage();
+	bitsWithoutParity = RemoveParityBits(bits);
 
-	//unsigned char previousBit = bits.at(10);
-	//unsigned char newBit; 
-	//newBit ^= previousBit;
-	//std::cout << newBit;
+	group = "";
+	for (auto& c : bitsWithoutParity)
+		group += (std::to_string(c));
 
+	passedInCharacter = GetCharacterFromBinary(group);
+
+	std::cout << "passed back character after parity: " << passedInCharacter << std::endl;
+
+	m_Response[messageId] = 'c';
+
+	//textField.AddMessage(response);
 }
 
-void NetworkHelper::ReceiveDataMessage(std::vector<unsigned char> bits)
-{
-	/*
-	Opcode: D 1 byte
-	File name: 32 bytes
-	Location: 4 bytes
-	Data Length: 1 byte
-	Data 10 bytes
-	Valid 1 byte
-	*/
-
-	unsigned char file[32] = "";
-	int tolerantFile = -1;
-	int count = 0;
-	std::string fileTitle = "Results";
-	std::string fileName = "";
-	for (int i = 1; i < 33; i++)
-	{
-		file[count] = bits.at(i);
-		if (bits.at(i) != '0')
-		{
-			fileTitle.push_back(file[count]);
-			fileName.push_back(file[count]);
-			int fileNum = bits.at(i) - '0';
-			if (fileNum > 0 && fileNum < 4)
-				tolerantFile = fileNum;
-		}
-		count++;
-	}
-
-	VotingStructure* structure = NULL;
-
-	if (fileName == "SmallTextFile.txt")
-		structure = m_SmallText;
-	else if (fileName == "LargeTextFile.txt")
-		structure = m_LargeText;
-	//else if (fileName == "SmallBinary.jpg")
-	//	structure = &m_FaultTolerantHelper->m_SmallBinaryFile;
-	//else if (fileName == "LargeBinary.wav")
-	//	structure = &m_FaultTolerantHelper->m_LargeBinaryFile;
-
-	unsigned int location = 0;
-	location += bits.at(33);
-	location += (bits.at(34) * 256);
-	location += (bits.at(35) * 512);
-	location += (bits.at(36) * 1024);
-
-	unsigned int length = bits.at(37);
-	unsigned char data[10] = "";
-
-	count = 0;
-	
-	std::ofstream fout(fileTitle, std::ofstream::out | std::ofstream::app | std::ofstream::binary);
-
-	//for (int i = 38; i < 48; i++)
-	//{
-	//	data[count] = bits.at(i);
-	//	fout << data[count];
-	//	if(structure)
-	//		structure->m_Contents[tolerantFile].push_back(data[count]);
-	//	count++;
-	//}
-
-	if (length == 10)
-	{
-		unsigned char code[1]; code[0] = 'R';
-		location += 10;
-		sf::Packet packet;
-		packet.append(&code, 1);
-		packet.append(&file, 32);
-		packet.append(&location, 4);
-
-		if (m_Socket.send(packet, m_Ip, sendPort) != sf::Socket::Done)
-		{
-			std::cout << "Failed to send packet" << std::endl;
-			std::cout << "Error: " << m_Socket.Error << std::endl;
-		}
-	}
-
-	if (length == 0)
-		std::cout << std::endl << std::endl;
-
-	//unsigned char valid = bits.at(bits.size() - 1);
-
-	//unsigned char previousBit = bits.at(10);
-	//unsigned char newBit;
-	//newBit ^= previousBit;
-	//std::cout << newBit;
-}
-
-std::string NetworkHelper::GetBinaryFromCharacter(char c)
+std::vector<int> NetworkHelper::GetBinaryFromCharacter(char c)
 {
 	std::bitset<8> temp(c);
-	return temp.to_string();
+	std::string stringTemp = temp.to_string();
+	std::vector<int> bits;
+	for (int i = 0; i < stringTemp.size(); i++)
+		bits.push_back(stringTemp[i] - 48);
+	return bits;
 }
 
 char NetworkHelper::GetCharacterFromBinary(std::string group)
@@ -239,46 +158,56 @@ char NetworkHelper::GetCharacterFromBinary(std::string group)
 	return temp.to_ulong();
 }
 
-std::vector<char> NetworkHelper::ConvertMessageToBits(std::string message)
+std::vector<int> NetworkHelper::ConvertMessageToBits(std::string message)
 {
-	std::vector<char> bits;
+	std::vector<int> bits;
 	for (int i = 0; i < message.size(); i++)
 	{
-		std::string binary = GetBinaryFromCharacter(message[i]);
-		for (int j = 0; j < binary.size(); j++)
-			bits.push_back(binary[j]);
+		std::vector<int> tempBits = GetBinaryFromCharacter(message[i]);
+		for (auto bit : tempBits)
+			bits.push_back(bit);
 	}
 	return bits;
 }
 
-std::vector<char> NetworkHelper::CreateParityBits(std::vector<char> bits)
+std::vector<int> NetworkHelper::RemoveParityBits(std::vector<int> bits)
 {
-	std::vector<char> parity(20);
+	std::vector<int> parity;
 
+	for (int i = 1; i < bits.size(); i++)
+	{
+		if (!IsPowerOfTwo(i))
+		{
+			parity.push_back(bits.at(i));
+		}
+	}
+
+	return parity;
+}
+
+std::vector<int> NetworkHelper::CreateParityBits(std::vector<int> bits)
+{
+	std::vector<int> parity = LoadParityVector(bits);
+	
 	std::cout << "Creating parity bits for: ";
 	for (int i = 0; i < bits.size(); i++)
 		std::cout << bits[i];
 
 	std::cout << std::endl;
 
-	int count = 0;
-	for (int i = 1; i <= parity.size() - 1, count < bits.size(); i++)
+	for (int i = 1; i <= parity.size() - 1; i++)
 	{
-		if (!IsPowerOfTwo(i))
+		if (IsPowerOfTwo(i))
 		{
-			parity.at(i) = bits[count];
-			count++;
-		}
-		else
-		{
-			int val = CalculateParityValue(i, bits);
-			parity.at(i) = '0' + val;
+			int val = CalculateParityValue(i, parity);
+			parity.at(i) = val;
 		}
 	}
 
 	std::cout << "Resulting parity binary: ";
-	for (int i = 0; i < parity.size(); i++)
+	for (int i = 0; i < parity.size() ; i++)
 		std::cout << parity[i];
+	std::cout << std::endl;
 
 	return parity;
 }
@@ -296,19 +225,65 @@ bool NetworkHelper::IsEven(int n)
 	return (n % 2 == 0);
 }
 
-int NetworkHelper::CalculateParityValue(int whichBit, std::vector<char> bits)
+int NetworkHelper::CalculateParityValue(int whichBit, std::vector<int> bits)
 {
 	int parity = 0;
-	for (int i = whichBit; i <= bits.size() - 1; i+=whichBit)
+
+	for (int i = whichBit; i < bits.size(); i+=((whichBit) * 2))
 	{
 		for (int j = 0; j < whichBit; j++)
 		{
-			parity += '0' + bits.at(i + j);
+			if((i + j) < bits.size())
+				parity += (bits.at(i + j) - 48);
 		}
 	}
 
 	if (IsEven(parity))
-		return 1;
+		return 0;
 		
-	return 0;
+	return 1;
+}
+
+std::vector<int> NetworkHelper::LoadParityVector(std::vector<int> bits)
+{
+	std::vector<int> parity;
+	parity.push_back(NULL);
+
+	int count = 0;
+
+	for (int i = 1; count < bits.size(); i++)
+	{
+		if (!IsPowerOfTwo(i))
+		{
+			parity.push_back(bits[count]);
+			count++;
+		}
+		else
+			parity.push_back(0);
+	}
+
+	return parity;
+}
+
+void NetworkHelper::VerifyMessage(std::vector<int>& bits)
+{
+	std::vector<int> badBits;
+
+	for (int i = 1; i <= bits.size() - 1; i++)
+	{
+		if (IsPowerOfTwo(i))
+		{
+			int correctVal = CalculateParityValue(i, bits);
+			int currentVal = bits.at(i) - 48;
+			if (correctVal != currentVal)
+				badBits.push_back(i);
+		}
+	}
+
+	for (auto& bit : badBits)
+	{
+		int bitVal = bits.at(bit) - 48;
+		bits.at(bit) = (bitVal == 1 ? 0 : 1);
+	}
+
 }
